@@ -167,9 +167,9 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## Cell 4 — Automated Test: 5 Architecture Questions\n",
+    "## Cell 4 — Exam Practice: 5 Claude Certified Architect Questions\n",
     "\n",
-    "Runs 5 pre-written questions in a single conversation to validate the tutor's behaviour."
+    "Runs 5 scenario-based exam questions covering model selection, prompt caching, tool use, multi-agent orchestration, and responsible AI — aligned to the Claude Certified Architect exam topics."
    ]
   },
   {
@@ -179,11 +179,11 @@
    "outputs": [],
    "source": [
     "QUESTIONS = [\n",
-    "    \"What is Constitutional AI and how does it differ from standard RLHF?\",\n",
-    "    \"Can you walk me through how the attention mechanism works in a transformer?\",\n",
-    "    \"What exactly is a context window, and what limits how large it can be?\",\n",
-    "    \"Why does the word 'strawberry' sometimes count as 3 tokens? How does BPE tokenization work?\",\n",
-    "    \"What are the trade-offs between Claude Haiku, Sonnet, and Opus — when should I choose each?\",\n",
+    "    \"Exam Q1 - Model selection: A fintech startup needs to process 50,000 customer support tickets per day. Each ticket requires sentiment analysis and a one-sentence category label. Latency must be under 2 seconds and cost is a top constraint. Which Claude model would you recommend, and what prompt design choices would you make to keep costs low while maintaining accuracy?\",\n",
+    "    \"Exam Q2 - Prompt caching: Your application sends a 4,000-token system prompt on every API call. Describe exactly how prompt caching works in the Anthropic API, what the minimum token threshold is for a block to be cacheable, how long a cached prompt lives, and what the pricing difference is between cache-read tokens and standard input tokens.\",\n",
+    "    \"Exam Q3 - Tool use and agentic design: You are building a research agent that can search the web, read PDFs, and write summaries to a database. Explain how you would structure tool definitions in the Claude API, how the tool-call / tool-result turn sequence works in the messages array, and what safety guardrails you would add to prevent the agent from taking irreversible actions.\",\n",
+    "    \"Exam Q4 - Multi-agent orchestration: A team proposes a pipeline where Claude Opus acts as an orchestrator that breaks a complex coding task into subtasks and delegates each to a Claude Haiku worker. Describe the architectural pattern, how you would pass context between agents without hitting context-window limits, and two failure modes you would need to design against.\",\n",
+    "    \"Exam Q5 - Responsible AI: A client asks you to build a Claude-powered hiring assistant that ranks resumes. Identify at least three specific bias or fairness risks, explain how Constitutional AI principles apply to mitigating them, and describe one concrete evaluation you would run before deploying the system.\",\n",
     "]\n",
     "\n",
     "test_tutor = ArchitectureTutor()\n",

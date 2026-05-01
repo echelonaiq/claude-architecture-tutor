@@ -76,6 +76,51 @@
 
     .divider { flex: 1; }
 
+    /* skeleton loading buttons */
+    .quick-btn.loading {
+      background: var(--navy-3);
+      border-color: var(--border);
+      color: transparent;
+      cursor: default;
+      position: relative;
+      overflow: hidden;
+      pointer-events: none;
+      min-height: 52px;
+    }
+    .quick-btn.loading::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, #1e3a5f55 50%, transparent 100%);
+      animation: shimmer 1.2s infinite;
+    }
+    @keyframes shimmer {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    #refresh-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--teal);
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      transition: border-color 0.15s, background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    #refresh-btn:hover:not(:disabled) {
+      background: var(--navy-3);
+      border-color: var(--teal);
+    }
+    #refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #refresh-btn .spin-icon { display: inline-block; }
+    #refresh-btn.spinning .spin-icon { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     #reset-btn {
       background: transparent;
       border: 1px solid var(--border);
@@ -287,12 +332,11 @@
 <div id="app">
   <!-- Sidebar -->
   <aside id="sidebar">
-    <h2>Quick Questions</h2>
-    <button class="quick-btn" data-q="What is Constitutional AI and how does it differ from standard RLHF?">What is Constitutional AI vs standard RLHF?</button>
-    <button class="quick-btn" data-q="Can you walk me through how the attention mechanism works in a transformer?">How does the attention mechanism work?</button>
-    <button class="quick-btn" data-q="What exactly is a context window, and what limits how large it can be?">What is a context window?</button>
-    <button class="quick-btn" data-q="Why does the word 'strawberry' sometimes count as 3 tokens? How does BPE tokenization work?">Why does "strawberry" count as 3 tokens?</button>
-    <button class="quick-btn" data-q="What are the trade-offs between Claude Haiku, Sonnet, and Opus — when should I choose each?">When should I choose Haiku vs Sonnet vs Opus?</button>
+    <h2>Exam Questions</h2>
+    <div id="questions-list"></div>
+    <button id="refresh-btn" title="Generate new questions">
+      <span class="spin-icon">&#x21BB;</span> Refresh questions
+    </button>
     <div class="divider"></div>
     <button id="reset-btn">&#x21BA; Reset conversation</button>
   </aside>
@@ -324,14 +368,16 @@
   let streaming = false;
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
-  const messagesEl  = document.getElementById('messages');
-  const inputEl     = document.getElementById('user-input');
-  const sendBtn     = document.getElementById('send-btn');
-  const resetBtn    = document.getElementById('reset-btn');
-  const emptyState  = document.getElementById('empty-state');
-  const sidebar     = document.getElementById('sidebar');
-  const overlay     = document.getElementById('overlay');
-  const menuToggle  = document.getElementById('menu-toggle');
+  const messagesEl    = document.getElementById('messages');
+  const inputEl       = document.getElementById('user-input');
+  const sendBtn       = document.getElementById('send-btn');
+  const resetBtn      = document.getElementById('reset-btn');
+  const refreshBtn    = document.getElementById('refresh-btn');
+  const questionsList = document.getElementById('questions-list');
+  const emptyState    = document.getElementById('empty-state');
+  const sidebar       = document.getElementById('sidebar');
+  const overlay       = document.getElementById('overlay');
+  const menuToggle    = document.getElementById('menu-toggle');
 
   // ── Mobile sidebar ─────────────────────────────────────────────────────────
   menuToggle.addEventListener('click', () => {
@@ -343,15 +389,58 @@
     overlay.classList.remove('show');
   });
 
-  // ── Quick questions ────────────────────────────────────────────────────────
-  document.querySelectorAll('.quick-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (streaming) return;
-      sidebar.classList.remove('open');
-      overlay.classList.remove('show');
-      sendMessage(btn.dataset.q);
+  // ── Dynamic questions ──────────────────────────────────────────────────────
+  function showLoadingSkeleton() {
+    questionsList.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'quick-btn loading';
+      btn.textContent = 'Loading…';
+      questionsList.appendChild(btn);
+    }
+  }
+
+  function renderQuestions(questions) {
+    questionsList.innerHTML = '';
+    questions.forEach(q => {
+      const btn = document.createElement('button');
+      btn.className = 'quick-btn';
+      // Truncate long questions to ~80 chars for the button label
+      btn.textContent = q.length > 80 ? q.slice(0, 77).trimEnd() + '…' : q;
+      btn.title = q;
+      btn.addEventListener('click', () => {
+        if (streaming) return;
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+        sendMessage(q);
+      });
+      questionsList.appendChild(btn);
     });
-  });
+  }
+
+  async function loadQuestions() {
+    showLoadingSkeleton();
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add('spinning');
+    try {
+      const res = await fetch('/questions');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderQuestions(data.questions);
+    } catch {
+      renderQuestions([
+        'Could not load questions — check that the server is running.',
+      ]);
+    } finally {
+      refreshBtn.disabled = false;
+      refreshBtn.classList.remove('spinning');
+    }
+  }
+
+  refreshBtn.addEventListener('click', loadQuestions);
+
+  // Load questions on startup
+  loadQuestions();
 
   // ── Reset ──────────────────────────────────────────────────────────────────
   resetBtn.addEventListener('click', () => {
