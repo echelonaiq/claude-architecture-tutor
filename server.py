@@ -84,12 +84,32 @@ FALLBACK_QUESTIONS = [
     "A developer productivity assistant maintains context across a 40-turn coding session. By turn 30, response quality degrades because the context window is saturated with low-value tool outputs. What context management strategy would you implement, and how would you decide what to summarize versus preserve verbatim?",
 ]
 
+EVALUATOR_SYSTEM = """\
+You are an expert AI response quality evaluator. Given a system prompt, a user \
+input, the model's response, and a list of evaluation criteria, score each \
+criterion from 1–10 and provide a brief reason.
+
+Return ONLY valid JSON — no markdown fences, no preamble. Exactly this shape:
+{
+  "scores": {
+    "<criterion>": {"score": <1-10>, "reason": "<one sentence>"}
+  },
+  "improvement_suggestion": "<one concrete suggestion>"
+}
+"""
+
 client = anthropic.AsyncAnthropic()
 
 
 class ChatRequest(BaseModel):
     messages: list[dict]
     user_input: str
+
+
+class EvaluateRequest(BaseModel):
+    prompt: str
+    test_input: str
+    criteria: list[str]
 
 
 async def sse_stream(messages: list[dict], user_input: str):
@@ -161,6 +181,70 @@ async def get_questions():
     except Exception:
         pass
     return {"questions": FALLBACK_QUESTIONS}
+
+
+@app.post("/evaluate")
+async def evaluate(req: EvaluateRequest):
+    # Call 1: run the prompt against the test input
+    run_resp = await client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1024,
+        system=req.prompt,
+        messages=[{"role": "user", "content": req.test_input}],
+    )
+    response_text = run_resp.content[0].text.strip()
+
+    # Call 2: evaluate the response against criteria (cached evaluator system)
+    criteria_list = "\n".join(f"- {c}" for c in req.criteria)
+    eval_user_msg = (
+        f"System prompt:\n{req.prompt}\n\n"
+        f"User input:\n{req.test_input}\n\n"
+        f"Model response:\n{response_text}\n\n"
+        f"Criteria to score:\n{criteria_list}"
+    )
+    eval_resp = await client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1024,
+        system=[
+            {
+                "type": "text",
+                "text": EVALUATOR_SYSTEM,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        messages=[{"role": "user", "content": eval_user_msg}],
+    )
+
+    raw = eval_resp.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="Evaluator returned invalid JSON")
+
+    scores: dict = parsed.get("scores", {})
+    score_values = [v["score"] for v in scores.values() if isinstance(v.get("score"), (int, float))]
+    overall = round(sum(score_values) / len(score_values), 1) if score_values else 0
+
+    return {
+        "response": response_text,
+        "scores": scores,
+        "overall_score": overall,
+        "improvement_suggestion": parsed.get("improvement_suggestion", ""),
+    }
+
+
+@app.get("/eval")
+async def eval_page():
+    html_path = BASE_DIR / "eval.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="eval.html not found")
+    return FileResponse(html_path)
 
 
 @app.get("/")

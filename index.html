@@ -153,7 +153,23 @@
       font-weight: 600;
       color: var(--teal);
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
     }
+
+    .nav-link {
+      margin-left: auto;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nav-link:hover { border-color: var(--teal); color: var(--teal); }
 
     #messages {
       flex: 1;
@@ -346,6 +362,7 @@
     <header>
       <button id="menu-toggle" aria-label="Open menu">&#9776;</button>
       Claude Architecture Tutor
+      <a class="nav-link" href="/eval">Prompt Evaluator</a>
     </header>
 
     <div id="messages">

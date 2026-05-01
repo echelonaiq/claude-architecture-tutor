@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompt Evaluator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:      #0a1628;
+      --navy-2:    #0f2044;
+      --navy-3:    #162952;
+      --teal:      #14b8a6;
+      --teal-dark: #0d9488;
+      --text:      #e2e8f0;
+      --text-dim:  #94a3b8;
+      --border:    #1e3a5f;
+      --green:     #22c55e;
+      --yellow:    #eab308;
+      --red:       #ef4444;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--text);
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    header {
+      background: var(--navy-2);
+      border-bottom: 1px solid var(--border);
+      padding: 0.9rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--teal);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-shrink: 0;
+    }
+    .nav-link {
+      margin-left: auto;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nav-link:hover { border-color: var(--teal); color: var(--teal); }
+
+    /* ── Page layout ─────────────────────────────────────────────────────── */
+    #page {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ──────────────────────────────────────────────────────── */
+    #left-panel {
+      width: 400px;
+      min-width: 340px;
+      background: var(--navy-2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 1.25rem 1rem;
+      gap: 1rem;
+    }
+
+    /* ── Right panel ─────────────────────────────────────────────────────── */
+    #right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 1.25rem 1.5rem;
+      gap: 1.25rem;
+    }
+
+    /* ── Shared form elements ─────────────────────────────────────────────── */
+    label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--teal);
+      display: block;
+      margin-bottom: 0.35rem;
+    }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 0.6rem 0.8rem;
+      outline: none;
+      resize: vertical;
+      transition: border-color 0.15s;
+    }
+    textarea:focus, input[type="text"]:focus { border-color: var(--teal); }
+    textarea::placeholder, input::placeholder { color: var(--text-dim); }
+
+    /* ── Preset templates ─────────────────────────────────────────────────── */
+    #presets {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .preset-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+    /* ── Criteria checkboxes ─────────────────────────────────────────────── */
+    #criteria-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .criterion-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+    }
+    .criterion-item input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--teal);
+      flex-shrink: 0;
+    }
+
+    /* ── Compare mode toggle ─────────────────────────────────────────────── */
+    #compare-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.85rem;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .toggle-track::before {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      left: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--text-dim);
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track {
+      background: var(--teal-dark);
+      border-color: var(--teal);
+    }
+    .toggle-switch input:checked + .toggle-track::before {
+      transform: translate(16px, -50%);
+      background: white;
+    }
+
+    #compare-prompt-b-wrap { display: none; }
+    #compare-prompt-b-wrap.visible { display: block; }
+
+    /* ── Run button ──────────────────────────────────────────────────────── */
+    #run-btn {
+      background: var(--teal);
+      border: none;
+      border-radius: 8px;
+      color: var(--navy);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 0.65rem 1rem;
+      width: 100%;
+      transition: background 0.15s;
+    }
+    #run-btn:hover:not(:disabled) { background: var(--teal-dark); }
+    #run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Right panel: response box ───────────────────────────────────────── */
+    .section-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 0.5rem;
+    }
+
+    #results-area {
+      display: none;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    #results-area.visible { display: flex; }
+
+    /* compare layout */
+    #compare-results {
+      display: none;
+      gap: 1rem;
+    }
+    #compare-results.visible { display: grid; grid-template-columns: 1fr 1fr; }
+
+    .result-col {
+      background: var(--navy-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .result-col h3 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    /* ── Response text box ───────────────────────────────────────────────── */
+    .response-box {
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 80px;
+      color: var(--text);
+    }
+
+    /* ── Score cards ─────────────────────────────────────────────────────── */
+    .score-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .score-card {
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+    }
+
+    .score-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.4rem;
+    }
+
+    .criterion-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .score-badge {
+      font-size: 0.82rem;
+      font-weight: 700;
+      min-width: 28px;
+      text-align: right;
+    }
+
+    .score-bar-track {
+      height: 5px;
+      background: var(--navy);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .score-reason {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 0.35rem;
+      line-height: 1.4;
+    }
+
+    /* ── Overall score ────────────────────────────────────────────────────── */
+    .overall-wrap {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1.1rem;
+    }
+
+    .overall-number {
+      font-size: 2.4rem;
+      font-weight: 800;
+      line-height: 1;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .overall-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    /* ── Improvement suggestion ──────────────────────────────────────────── */
+    .suggestion-box {
+      background: #14b8a610;
+      border: 1px solid var(--teal-dark);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--teal);
+    }
+
+    /* ── Skeleton / spinner ─────────────────────────────────────────────── */
+    #loading-spinner {
+      display: none;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      padding: 0.5rem 0;
+    }
+    #loading-spinner.visible { display: flex; }
+    .spinner-ring {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--teal);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── History section ─────────────────────────────────────────────────── */
+    #history-section {
+      border-top: 1px solid var(--border);
+      padding: 1.25rem 1.5rem;
+      background: var(--navy-2);
+      flex-shrink: 0;
+    }
+
+    #history-section h2 {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 0.75rem;
+    }
+
+    #history-list {
+      display: flex;
+      gap: 0.75rem;
+      overflow-x: auto;
+      padding-bottom: 0.25rem;
+    }
+
+    .history-card {
+      min-width: 180px;
+      max-width: 180px;
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .history-card:hover { border-color: var(--teal); }
+
+    .history-card-score {
+      font-size: 1.4rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .history-card-prompt {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.4;
+    }
+
+    .history-empty {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+<div id="page">
+  <header>
+    Prompt Evaluator
+    <a class="nav-link" href="/">Architecture Tutor</a>
+  </header>
+
+  <div id="workspace">
+    <!-- ── Left panel ──────────────────────────────────────────── -->
+    <div id="left-panel">
+
+      <div>
+        <label>Load preset</label>
+        <div id="presets">
+          <button class="preset-btn" data-preset="support">Customer Support</button>
+          <button class="preset-btn" data-preset="codereview">Code Review</button>
+          <button class="preset-btn" data-preset="summarizer">Summarizer</button>
+        </div>
+      </div>
+
+      <div>
+        <label for="prompt-a">System prompt</label>
+        <textarea id="prompt-a" rows="6" placeholder="Enter your system prompt here…"></textarea>
+      </div>
+
+      <div id="compare-prompt-b-wrap">
+        <label for="prompt-b">System prompt B (compare)</label>
+        <textarea id="prompt-b" rows="6" placeholder="Enter alternate prompt…"></textarea>
+      </div>
+
+      <div>
+        <label for="test-input">Test input</label>
+        <textarea id="test-input" rows="3" placeholder="The user message to send to the model…"></textarea>
+      </div>
+
+      <div>
+        <label>Evaluation criteria</label>
+        <div id="criteria-list">
+          <label class="criterion-item"><input type="checkbox" value="Clarity" checked> Clarity</label>
+          <label class="criterion-item"><input type="checkbox" value="Accuracy" checked> Accuracy</label>
+          <label class="criterion-item"><input type="checkbox" value="Helpfulness" checked> Helpfulness</label>
+          <label class="criterion-item"><input type="checkbox" value="Conciseness"> Conciseness</label>
+          <label class="criterion-item"><input type="checkbox" value="Tone"> Tone</label>
+          <label class="criterion-item"><input type="checkbox" value="Safety"> Safety</label>
+        </div>
+      </div>
+
+      <div id="compare-row">
+        <label class="toggle-switch" title="Compare two prompts side by side">
+          <input type="checkbox" id="compare-toggle">
+          <span class="toggle-track"></span>
+        </label>
+        <span style="font-size:0.83rem; color:var(--text-dim);">Compare mode</span>
+      </div>
+
+      <button id="run-btn">Run Evaluation</button>
+    </div>
+
+    <!-- ── Right panel ─────────────────────────────────────────── -->
+    <div id="right-panel">
+
+      <div id="loading-spinner">
+        <span class="spinner-ring"></span>
+        Evaluating…
+      </div>
+
+      <!-- Single result -->
+      <div id="results-area">
+        <div>
+          <div class="section-title">Model Response</div>
+          <div class="response-box" id="response-text"></div>
+        </div>
+        <div>
+          <div class="section-title">Scores</div>
+          <div class="score-cards" id="score-cards"></div>
+        </div>
+        <div>
+          <div class="section-title">Overall</div>
+          <div class="overall-wrap">
+            <div class="overall-number" id="overall-score">—</div>
+            <div class="overall-label">out of 10</div>
+          </div>
+        </div>
+        <div>
+          <div class="section-title">Improvement Suggestion</div>
+          <div class="suggestion-box" id="suggestion-text"></div>
+        </div>
+      </div>
+
+      <!-- Compare results -->
+      <div id="compare-results">
+        <div class="result-col" id="col-a">
+          <h3>Prompt A</h3>
+          <div class="section-title">Response</div>
+          <div class="response-box" id="response-a"></div>
+          <div class="section-title">Scores</div>
+          <div class="score-cards" id="scores-a"></div>
+          <div class="section-title">Overall</div>
+          <div class="overall-wrap">
+            <div class="overall-number" id="overall-a">—</div>
+            <div class="overall-label">out of 10</div>
+          </div>
+          <div class="section-title">Suggestion</div>
+          <div class="suggestion-box" id="suggestion-a"></div>
+        </div>
+        <div class="result-col" id="col-b">
+          <h3>Prompt B</h3>
+          <div class="section-title">Response</div>
+          <div class="response-box" id="response-b"></div>
+          <div class="section-title">Scores</div>
+          <div class="score-cards" id="scores-b"></div>
+          <div class="section-title">Overall</div>
+          <div class="overall-wrap">
+            <div class="overall-number" id="overall-b">—</div>
+            <div class="overall-label">out of 10</div>
+          </div>
+          <div class="section-title">Suggestion</div>
+          <div class="suggestion-box" id="suggestion-b"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── History ─────────────────────────────────────────────────── -->
+  <div id="history-section">
+    <h2>Recent Evaluations</h2>
+    <div id="history-list">
+      <span class="history-empty">No evaluations yet.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Presets ────────────────────────────────────────────────────────────────
+  const PRESETS = {
+    support: {
+      prompt: `You are a helpful customer support agent for a SaaS product. \
+Respond with empathy and professionalism. Always acknowledge the customer's \
+frustration before offering a solution. Keep responses under 150 words.`,
+      input: `I've been trying to export my data for three days and keep getting a \
+"500 Internal Server Error". This is urgent — I need this for a client presentation \
+tomorrow morning. Nobody on your support team has responded to my tickets.`,
+      criteria: ['Clarity', 'Helpfulness', 'Tone'],
+    },
+    codereview: {
+      prompt: `You are a senior software engineer conducting a code review. \
+Identify bugs, style issues, security vulnerabilities, and suggest improvements. \
+Format feedback as a bulleted list grouped by severity: Critical, Major, Minor.`,
+      input: `def get_user(user_id):
+    conn = psycopg2.connect(DB_URL)
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
+    return cursor.fetchone()`,
+      criteria: ['Accuracy', 'Clarity', 'Safety'],
+    },
+    summarizer: {
+      prompt: `You are a concise document summarizer. Extract the 3–5 most important \
+points from any text. Use bullet points. Avoid padding or filler phrases. \
+Each bullet should be one clear, complete sentence.`,
+      input: `The transformer architecture, introduced in the paper "Attention Is All You Need" \
+(Vaswani et al., 2017), revolutionized natural language processing by replacing recurrence \
+and convolutions with self-attention mechanisms. Unlike RNNs, transformers process all \
+tokens in parallel, dramatically improving training speed on modern hardware. \
+The key innovation is multi-head self-attention, which allows the model to jointly attend \
+to information from different representation subspaces at different positions. \
+Positional encodings are added to token embeddings to give the model a sense of order. \
+Feed-forward sublayers and layer normalization complete each transformer block. \
+Since 2017, virtually every state-of-the-art language model — including BERT, GPT, and \
+Claude — is built on this foundation.`,
+      criteria: ['Clarity', 'Accuracy', 'Conciseness'],
+    },
+  };
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = PRESETS[btn.dataset.preset];
+      if (!p) return;
+      document.getElementById('prompt-a').value = p.prompt;
+      document.getElementById('test-input').value = p.input;
+      document.querySelectorAll('#criteria-list input[type=checkbox]').forEach(cb => {
+        cb.checked = p.criteria.includes(cb.value);
+      });
+    });
+  });
+
+  // ── Compare mode ───────────────────────────────────────────────────────────
+  const compareToggle = document.getElementById('compare-toggle');
+  compareToggle.addEventListener('change', () => {
+    document.getElementById('compare-prompt-b-wrap').classList.toggle('visible', compareToggle.checked);
+  });
+
+  // ── Score color ────────────────────────────────────────────────────────────
+  function scoreColor(n) {
+    if (n >= 8) return 'var(--green)';
+    if (n >= 5) return 'var(--yellow)';
+    return 'var(--red)';
+  }
+
+  // ── Render score cards ─────────────────────────────────────────────────────
+  function renderScores(container, scores) {
+    container.innerHTML = '';
+    for (const [criterion, data] of Object.entries(scores)) {
+      const score = data.score ?? 0;
+      const reason = data.reason ?? '';
+      const color = scoreColor(score);
+
+      const card = document.createElement('div');
+      card.className = 'score-card';
+      card.innerHTML = `
+        <div class="score-card-header">
+          <span class="criterion-name">${criterion}</span>
+          <span class="score-badge" style="color:${color}">${score}/10</span>
+        </div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill" style="width:${score * 10}%; background:${color}"></div>
+        </div>
+        ${reason ? `<div class="score-reason">${reason}</div>` : ''}
+      `;
+      container.appendChild(card);
+    }
+  }
+
+  // ── Render overall ─────────────────────────────────────────────────────────
+  function renderOverall(el, value) {
+    el.textContent = value;
+    el.style.color = scoreColor(value);
+  }
+
+  // ── Run evaluation ─────────────────────────────────────────────────────────
+  async function runEval(prompt, testInput, criteria) {
+    const res = await fetch('/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, test_input: testInput, criteria }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    return res.json();
+  }
+
+  // ── History ────────────────────────────────────────────────────────────────
+  const MAX_HISTORY = 5;
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem('eval_history') || '[]'); }
+    catch { return []; }
+  }
+
+  function saveHistory(entry) {
+    const h = loadHistory();
+    h.unshift(entry);
+    if (h.length > MAX_HISTORY) h.length = MAX_HISTORY;
+    localStorage.setItem('eval_history', JSON.stringify(h));
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('history-list');
+    const h = loadHistory();
+    if (!h.length) {
+      list.innerHTML = '<span class="history-empty">No evaluations yet.</span>';
+      return;
+    }
+    list.innerHTML = '';
+    h.forEach(entry => {
+      const card = document.createElement('div');
+      card.className = 'history-card';
+      card.innerHTML = `
+        <div class="history-card-score" style="color:${scoreColor(entry.overall)}">${entry.overall}</div>
+        <div class="history-card-prompt">${entry.prompt.slice(0, 80)}</div>
+      `;
+      card.title = entry.prompt;
+      card.addEventListener('click', () => {
+        document.getElementById('prompt-a').value = entry.prompt;
+        document.getElementById('test-input').value = entry.input;
+      });
+      list.appendChild(card);
+    });
+  }
+
+  renderHistory();
+
+  // ── Main handler ───────────────────────────────────────────────────────────
+  document.getElementById('run-btn').addEventListener('click', async () => {
+    const promptA = document.getElementById('prompt-a').value.trim();
+    const promptB = document.getElementById('prompt-b').value.trim();
+    const testInput = document.getElementById('test-input').value.trim();
+    const criteria = [...document.querySelectorAll('#criteria-list input[type=checkbox]:checked')]
+      .map(cb => cb.value);
+    const compareMode = compareToggle.checked;
+
+    if (!promptA) { alert('Please enter a system prompt.'); return; }
+    if (!testInput) { alert('Please enter a test input.'); return; }
+    if (!criteria.length) { alert('Select at least one criterion.'); return; }
+    if (compareMode && !promptB) { alert('Enter a second system prompt for compare mode.'); return; }
+
+    const runBtn = document.getElementById('run-btn');
+    const spinner = document.getElementById('loading-spinner');
+    const resultsArea = document.getElementById('results-area');
+    const compareResults = document.getElementById('compare-results');
+
+    runBtn.disabled = true;
+    spinner.classList.add('visible');
+    resultsArea.classList.remove('visible');
+    compareResults.classList.remove('visible');
+
+    try {
+      if (compareMode) {
+        const [dataA, dataB] = await Promise.all([
+          runEval(promptA, testInput, criteria),
+          runEval(promptB, testInput, criteria),
+        ]);
+
+        document.getElementById('response-a').textContent = dataA.response;
+        renderScores(document.getElementById('scores-a'), dataA.scores);
+        renderOverall(document.getElementById('overall-a'), dataA.overall_score);
+        document.getElementById('suggestion-a').textContent = dataA.improvement_suggestion;
+
+        document.getElementById('response-b').textContent = dataB.response;
+        renderScores(document.getElementById('scores-b'), dataB.scores);
+        renderOverall(document.getElementById('overall-b'), dataB.overall_score);
+        document.getElementById('suggestion-b').textContent = dataB.improvement_suggestion;
+
+        compareResults.classList.add('visible');
+
+        saveHistory({ prompt: promptA, input: testInput, overall: dataA.overall_score });
+        saveHistory({ prompt: promptB, input: testInput, overall: dataB.overall_score });
+
+      } else {
+        const data = await runEval(promptA, testInput, criteria);
+
+        document.getElementById('response-text').textContent = data.response;
+        renderScores(document.getElementById('score-cards'), data.scores);
+        renderOverall(document.getElementById('overall-score'), data.overall_score);
+        document.getElementById('suggestion-text').textContent = data.improvement_suggestion;
+
+        resultsArea.classList.add('visible');
+
+        saveHistory({ prompt: promptA, input: testInput, overall: data.overall_score });
+      }
+
+      renderHistory();
+
+    } catch (err) {
+      alert(`Evaluation failed: ${err.message}`);
+    } finally {
+      runBtn.disabled = false;
+      spinner.classList.remove('visible');
+    }
+  });
+</script>
+</body>
+</html>
