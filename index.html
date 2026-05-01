@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Architecture Tutor</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:      #0a1628;
+      --navy-2:    #0f2044;
+      --navy-3:    #162952;
+      --teal:      #14b8a6;
+      --teal-dark: #0d9488;
+      --text:      #e2e8f0;
+      --text-dim:  #94a3b8;
+      --border:    #1e3a5f;
+      --user-bg:   #14b8a620;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--text);
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    #app {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    #sidebar {
+      width: 280px;
+      min-width: 280px;
+      background: var(--navy-2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem 1rem;
+      gap: 0.75rem;
+      overflow-y: auto;
+    }
+
+    #sidebar h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 0.25rem;
+    }
+
+    .quick-btn {
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      padding: 0.6rem 0.75rem;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .quick-btn:hover {
+      background: var(--navy);
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+
+    .divider { flex: 1; }
+
+    #reset-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0.55rem 0.75rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    #reset-btn:hover {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    /* ── Main chat area ───────────────────────────────────────────────────── */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    header {
+      background: var(--navy-2);
+      border-bottom: 1px solid var(--border);
+      padding: 0.9rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--teal);
+      flex-shrink: 0;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* individual message */
+    .msg {
+      max-width: 780px;
+      width: 100%;
+    }
+
+    .msg.user { align-self: flex-end; }
+    .msg.assistant { align-self: flex-start; }
+
+    .msg-bubble {
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      line-height: 1.65;
+    }
+
+    .msg.user .msg-bubble {
+      background: var(--user-bg);
+      border: 1px solid var(--teal);
+      border-bottom-right-radius: 3px;
+    }
+
+    .msg.assistant .msg-bubble {
+      background: var(--navy-2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 3px;
+    }
+
+    /* markdown inside assistant bubbles */
+    .msg-bubble p  { margin-bottom: 0.5rem; }
+    .msg-bubble p:last-child { margin-bottom: 0; }
+    .msg-bubble pre {
+      background: var(--navy);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow-x: auto;
+      padding: 0.65rem 0.85rem;
+      margin: 0.5rem 0;
+      font-size: 0.82rem;
+    }
+    .msg-bubble code {
+      background: var(--navy);
+      border-radius: 3px;
+      font-size: 0.82rem;
+      padding: 0.1em 0.35em;
+    }
+    .msg-bubble pre code { background: none; padding: 0; }
+    .msg-bubble ul, .msg-bubble ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+    .msg-bubble li { margin-bottom: 0.2rem; }
+    .msg-bubble strong { color: var(--teal); }
+
+    /* typing cursor */
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--teal);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+      color: var(--text-dim);
+    }
+    .msg.user .label { text-align: right; }
+
+    /* ── Input bar ────────────────────────────────────────────────────────── */
+    #input-area {
+      border-top: 1px solid var(--border);
+      background: var(--navy-2);
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      gap: 0.65rem;
+      flex-shrink: 0;
+    }
+
+    #user-input {
+      flex: 1;
+      background: var(--navy-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.9rem;
+      padding: 0.6rem 0.85rem;
+      resize: none;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+      min-height: 42px;
+      max-height: 140px;
+    }
+
+    #user-input:focus { border-color: var(--teal); }
+    #user-input::placeholder { color: var(--text-dim); }
+
+    #send-btn {
+      background: var(--teal);
+      border: none;
+      border-radius: 8px;
+      color: var(--navy);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0 1.1rem;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    #send-btn:hover:not(:disabled) { background: var(--teal-dark); }
+    #send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Empty state ──────────────────────────────────────────────────────── */
+    #empty-state {
+      margin: auto;
+      text-align: center;
+      color: var(--text-dim);
+      pointer-events: none;
+      user-select: none;
+    }
+    #empty-state h1 { font-size: 1.3rem; color: var(--teal); margin-bottom: 0.4rem; }
+    #empty-state p  { font-size: 0.85rem; }
+
+    /* ── Mobile ───────────────────────────────────────────────────────────── */
+    #menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--teal);
+      font-size: 1.3rem;
+      margin-right: 0.6rem;
+    }
+
+    @media (max-width: 640px) {
+      #sidebar {
+        position: fixed;
+        top: 0; left: 0; bottom: 0;
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        width: 260px;
+        min-width: 0;
+      }
+      #sidebar.open { transform: translateX(0); }
+      #menu-toggle { display: block; }
+      #overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 40;
+      }
+      #overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body>
+<div id="overlay"></div>
+<div id="app">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <h2>Quick Questions</h2>
+    <button class="quick-btn" data-q="What is Constitutional AI and how does it differ from standard RLHF?">What is Constitutional AI vs standard RLHF?</button>
+    <button class="quick-btn" data-q="Can you walk me through how the attention mechanism works in a transformer?">How does the attention mechanism work?</button>
+    <button class="quick-btn" data-q="What exactly is a context window, and what limits how large it can be?">What is a context window?</button>
+    <button class="quick-btn" data-q="Why does the word 'strawberry' sometimes count as 3 tokens? How does BPE tokenization work?">Why does "strawberry" count as 3 tokens?</button>
+    <button class="quick-btn" data-q="What are the trade-offs between Claude Haiku, Sonnet, and Opus — when should I choose each?">When should I choose Haiku vs Sonnet vs Opus?</button>
+    <div class="divider"></div>
+    <button id="reset-btn">&#x21BA; Reset conversation</button>
+  </aside>
+
+  <!-- Main -->
+  <div id="main">
+    <header>
+      <button id="menu-toggle" aria-label="Open menu">&#9776;</button>
+      Claude Architecture Tutor
+    </header>
+
+    <div id="messages">
+      <div id="empty-state">
+        <h1>Claude Architecture Tutor</h1>
+        <p>Ask anything about transformers, tokenization, RLHF, CAI, and more.</p>
+      </div>
+    </div>
+
+    <div id="input-area">
+      <textarea id="user-input" rows="1" placeholder="Ask a question…"></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let history = [];   // [{role, content}, ...]
+  let streaming = false;
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const messagesEl  = document.getElementById('messages');
+  const inputEl     = document.getElementById('user-input');
+  const sendBtn     = document.getElementById('send-btn');
+  const resetBtn    = document.getElementById('reset-btn');
+  const emptyState  = document.getElementById('empty-state');
+  const sidebar     = document.getElementById('sidebar');
+  const overlay     = document.getElementById('overlay');
+  const menuToggle  = document.getElementById('menu-toggle');
+
+  // ── Mobile sidebar ─────────────────────────────────────────────────────────
+  menuToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+  });
+
+  // ── Quick questions ────────────────────────────────────────────────────────
+  document.querySelectorAll('.quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (streaming) return;
+      sidebar.classList.remove('open');
+      overlay.classList.remove('show');
+      sendMessage(btn.dataset.q);
+    });
+  });
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+  resetBtn.addEventListener('click', () => {
+    if (streaming) return;
+    history = [];
+    messagesEl.innerHTML = '';
+    messagesEl.appendChild(emptyState);
+    emptyState.style.display = '';
+  });
+
+  // ── Input auto-resize + Enter to send ─────────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = inputEl.scrollHeight + 'px';
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  sendBtn.addEventListener('click', handleSend);
+
+  function handleSend() {
+    const text = inputEl.value.trim();
+    if (!text || streaming) return;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    sendMessage(text);
+  }
+
+  // ── Render helpers ─────────────────────────────────────────────────────────
+  function appendMessage(role, content, withCursor = false) {
+    emptyState.style.display = 'none';
+
+    const wrap = document.createElement('div');
+    wrap.className = `msg ${role}`;
+
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = role === 'user' ? 'You' : 'Claude';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+
+    if (withCursor) {
+      bubble.textContent = '';
+      const cursor = document.createElement('span');
+      cursor.className = 'cursor';
+      bubble.appendChild(cursor);
+    } else {
+      if (role === 'assistant') {
+        bubble.innerHTML = marked.parse(content);
+      } else {
+        bubble.textContent = content;
+      }
+    }
+
+    wrap.appendChild(label);
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    return bubble;
+  }
+
+  // ── Core streaming logic ───────────────────────────────────────────────────
+  async function sendMessage(text) {
+    streaming = true;
+    sendBtn.disabled = true;
+    inputEl.disabled = true;
+
+    appendMessage('user', text);
+
+    const bubble = appendMessage('assistant', '', true);
+    let rawText = '';
+    let buffer  = '';
+
+    try {
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history, user_input: text }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by \n\n
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();   // keep incomplete trailing chunk
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data:')) continue;
+          const jsonStr = line.slice(5).trim();
+          let event;
+          try { event = JSON.parse(jsonStr); } catch { continue; }
+
+          if (event.type === 'token') {
+            rawText += event.text;
+            // show raw text + cursor while streaming
+            bubble.textContent = rawText;
+            const cursor = document.createElement('span');
+            cursor.className = 'cursor';
+            bubble.appendChild(cursor);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+
+          } else if (event.type === 'done') {
+            // final render with markdown
+            bubble.innerHTML = marked.parse(rawText);
+            history.push({ role: 'user', content: text });
+            history.push({ role: 'assistant', content: rawText });
+
+          } else if (event.type === 'error') {
+            bubble.innerHTML = `<span style="color:#f87171">Error: ${event.message}</span>`;
+          }
+        }
+      }
+
+      // flush any remaining buffer
+      if (buffer.trim().startsWith('data:')) {
+        try {
+          const event = JSON.parse(buffer.slice(5).trim());
+          if (event.type === 'done' && rawText) {
+            bubble.innerHTML = marked.parse(rawText);
+            if (history.at(-1)?.content !== rawText) {
+              history.push({ role: 'user', content: text });
+              history.push({ role: 'assistant', content: rawText });
+            }
+          }
+        } catch {}
+      }
+
+    } catch (err) {
+      bubble.innerHTML = `<span style="color:#f87171">Connection error: ${err.message}</span>`;
+    } finally {
+      streaming = false;
+      sendBtn.disabled = false;
+      inputEl.disabled = false;
+      inputEl.focus();
+    }
+  }
+</script>
+</body>
+</html>
